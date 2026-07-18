@@ -1,0 +1,188 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isAdmin() { return isEmailVerified() && request.auth.token.email == 'markopechnik@gmail.com'; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    function isClassTeacher(classId) {
+      return isSignedIn() &&
+             classId != null &&
+             classId is string &&
+             exists(/databases/$(database)/documents/classes/$(classId)) &&
+             get(/databases/$(database)/documents/classes/$(classId)).data.get('teacherId', '') == request.auth.uid;
+    }
+
+    function isClassMember(classId, userId) {
+      return isSignedIn() &&
+             classId != null &&
+             classId is string &&
+             userId != null &&
+             userId is string &&
+             exists(/databases/$(database)/documents/classes/$(classId)/members/$(userId));
+    }
+
+    function isPortfolioOwner(portfolioId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/portfolios/$(portfolioId)) &&
+             get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.get('studentId', '') == request.auth.uid &&
+             isClassMember(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.get('classId', ''), request.auth.uid);
+    }
+
+    function isPortfolioTeacher(portfolioId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/portfolios/$(portfolioId)) &&
+             isClassTeacher(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.get('classId', ''));
+    }
+
+    function getFinalDeadline(classData) {
+      return classData.get('deadlines', null) != null && classData.get('deadlines', []).size() > 14
+        ? classData.get('deadlines', [])[14]
+        : (classData.get('startDate', 0) != 0 ? classData.get('startDate', 0) : classData.get('createdAt', 0)) + 14 * 14 * 24 * 60 * 60 * 1000;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidUser(data) {
+      return data.get('uid', '') is string &&
+             data.get('uid', '').size() <= 128 &&
+             data.get('role', 'student') is string &&
+             (data.get('role', 'student') == 'student' || data.get('role', 'student') == 'educator') &&
+             (!('email' in data) || (data.get('email', '') is string && data.get('email', '').size() <= 150)) &&
+             (!('displayName' in data) || (data.get('displayName', '') is string && data.get('displayName', '').size() <= 100));
+    }
+
+    function isValidClass(data) {
+      return data.get('id', '') is string &&
+             data.get('id', '').size() <= 128 &&
+             data.get('code', '') is string &&
+             data.get('code', '').size() <= 50 &&
+             data.get('teacherId', '') is string &&
+             data.get('teacherId', '').size() <= 128 &&
+             data.get('name', '') is string &&
+             data.get('name', '').size() <= 100 &&
+             (!('teacherName' in data) || (data.get('teacherName', '') is string && data.get('teacherName', '').size() <= 100)) &&
+             (!('courseType' in data) || (data.get('courseType', '') is string && data.get('courseType', '').size() <= 50)) &&
+             (!('academicYear' in data) || (data.get('academicYear', '') is string && data.get('academicYear', '').size() <= 20));
+    }
+
+    function isValidPortfolio(data) {
+      return data.get('studentId', '') is string &&
+             data.get('studentId', '').size() <= 128 &&
+             data.get('classId', '') is string &&
+             data.get('classId', '').size() <= 128 &&
+             (!('inquiry' in data) || (data.get('inquiry', '') is string && data.get('inquiry', '').size() <= 600)) &&
+             (!('practice' in data) || (data.get('practice', '') is string && data.get('practice', '').size() <= 600)) &&
+             (!('experimentation' in data) || (data.get('experimentation', '') is string && data.get('experimentation', '').size() <= 600)) &&
+             (!('revision' in data) || (data.get('revision', '') is string && data.get('revision', '').size() <= 600)) &&
+             (!('portfolioName' in data) || (data.get('portfolioName', '') is string && data.get('portfolioName', '').size() <= 200)) &&
+             (!('mindMapWho' in data) || (data.get('mindMapWho', '') is string && data.get('mindMapWho', '').size() <= 1000)) &&
+             (!('mindMapWhat' in data) || (data.get('mindMapWhat', '') is string && data.get('mindMapWhat', '').size() <= 1000)) &&
+             (!('mindMapHow' in data) || (data.get('mindMapHow', '') is string && data.get('mindMapHow', '').size() <= 1000));
+    }
+
+    function isValidArtwork(data) {
+      return data.get('id', '') is string &&
+             data.get('id', '').size() <= 128 &&
+             data.get('imageUrl', '') is string &&
+             data.get('imageUrl', '').size() <= 1000 &&
+             data.get('type', '') is string &&
+             (data.get('type', '') == 'SI' || data.get('type', '') == 'Selected') &&
+             (!('title' in data) || (data.get('title', '') is string && data.get('title', '').size() <= 100)) &&
+             (!('materials' in data) || (data.get('materials', '') is string && data.get('materials', '').size() <= 200)) &&
+             (!('processText' in data) || (data.get('processText', '') is string && data.get('processText', '').size() <= 200)) &&
+             (!('ideas' in data) || (data.get('ideas', '') is string && data.get('ideas', '').size() <= 200)) &&
+             (!('digitalTools' in data) || (data.get('digitalTools', '') is string && data.get('digitalTools', '').size() <= 200));
+    }
+
+    function isValidFeedback(data) {
+      return data.get('id', '') is string &&
+             data.get('id', '').size() <= 128 &&
+             data.get('teacherId', '') is string &&
+             data.get('teacherId', '').size() <= 128 &&
+             data.get('text', '') is string &&
+             data.get('text', '').size() <= 1000;
+    }
+
+    function isValidProgressPhoto(data) {
+      return data.get('id', '') is string &&
+             data.get('id', '').size() <= 128 &&
+             data.get('imageUrl', '') is string &&
+             data.get('imageUrl', '').size() <= 1000 &&
+             (!('caption' in data) || (data.get('caption', '') is string && data.get('caption', '').size() <= 200));
+    }
+
+    // --- Rules ---
+
+    match /users/{userId}/private/profile {
+      allow get: if isOwner(userId) || (isSignedIn() && get(/databases/$(database)/documents/users/$(userId)/private/profile).data.get('isExample', false) == true) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().get('uid', '') == userId;
+      allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().get('role', 'student') == existing().get('role', 'student') && incoming().get('uid', '') == userId;
+    }
+
+    match /global_profiles/{profileId} {
+      allow get: if isOwner(profileId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(profileId) && isValidUser(incoming()) && incoming().get('uid', '') == profileId;
+      allow update: if isOwner(profileId) && isValidUser(incoming()) && incoming().get('role', 'student') == existing().get('role', 'student') && incoming().get('uid', '') == profileId;
+    }
+
+    match /classes/{classId} {
+      allow get: if isSignedIn() && (isClassTeacher(classId) || exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.auth.uid)) || isAdmin());
+      allow list: if isSignedIn() && (resource == null || request.auth.uid in resource.data.get('studentIds', []) || resource.data.get('teacherId', '') == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(classId) && isValidClass(incoming()) && incoming().get('teacherId', '') == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)/private/profile).data.get('role', '') == 'educator';
+      allow update: if isClassTeacher(classId) && isValidClass(incoming()) && incoming().get('teacherId', '') == existing().get('teacherId', '');
+      allow delete: if isClassTeacher(classId) || isAdmin();
+    }
+
+    match /classes/{classId}/members/{userId} {
+      allow read: if isOwner(userId) || isClassTeacher(classId) || isClassMember(classId, request.auth.uid) || isAdmin();
+      allow create, update: if (isOwner(userId) || isClassTeacher(classId)) && isValidId(userId) && isValidUser(incoming()) && incoming().get('uid', '') == userId;
+      allow delete: if isOwner(userId) || isClassTeacher(classId);
+    }
+
+    match /classes/{classId}/peer_critiques/{critiqueId} {
+      allow read: if isClassMember(classId, request.auth.uid) || isClassTeacher(classId) || isAdmin();
+      allow create: if isSignedIn() && isValidId(critiqueId) && incoming().get('authorId', '') == request.auth.uid && (isClassMember(classId, request.auth.uid) || isClassTeacher(classId)) && incoming().keys().hasOnly(['id', 'classId', 'authorId', 'authorName', 'targetStudentId', 'targetStudentName', 'artworkId', 'artworkTitle', 'artworkUrl', 'text', 'createdAt', 'isVerified', 'aiRating', 'aiFeedback', 'foundTerminology', 'aiVerificationDetails', 'updatedAt']) && incoming().get('text', '').size() <= 2000 && exists(/databases/$(database)/documents/classes/$(classId)/members/$(incoming().get('targetStudentId', '')));
+      allow update: if isSignedIn() && request.auth.uid == incoming().get('authorId', '') && (isClassMember(classId, request.auth.uid) || isClassTeacher(classId)) && incoming().keys().hasOnly(['id', 'classId', 'authorId', 'authorName', 'targetStudentId', 'targetStudentName', 'artworkId', 'artworkTitle', 'artworkUrl', 'text', 'createdAt', 'isVerified', 'aiRating', 'aiFeedback', 'foundTerminology', 'aiVerificationDetails', 'updatedAt']) && incoming().get('text', '').size() <= 2000 && incoming().get('authorId', '') == existing().get('authorId', '') && incoming().get('targetStudentId', '') == existing().get('targetStudentId', '') && incoming().get('classId', '') == existing().get('classId', '');
+      allow delete: if isSignedIn() && (request.auth.uid == existing().get('authorId', '') || isClassTeacher(classId));
+    }
+
+    match /portfolios/{portfolioId} {
+      allow read: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/portfolios/$(portfolioId)) && get(/databases/$(database)/documents/users/$(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.studentId)/private/profile).data.get('isExample', false) == true);
+      allow create: if isSignedIn() && isValidId(portfolioId) && isValidPortfolio(incoming()) && portfolioId == incoming().get('classId', '') + '_' + incoming().get('studentId', '') && incoming().get('studentId', '') == request.auth.uid && isClassMember(incoming().get('classId', ''), request.auth.uid) && incoming().get('teacherGrade', null) == null && incoming().get('aiJudgeResult', null) == null;
+      allow update: if (isPortfolioTeacher(portfolioId) && isValidPortfolio(incoming()) && incoming().get('studentId', '') == existing().get('studentId', '') && incoming().get('classId', '') == existing().get('classId', '')) ||
+                       (isPortfolioOwner(portfolioId) && isValidPortfolio(incoming()) && incoming().get('studentId', '') == existing().get('studentId', '') && incoming().get('classId', '') == existing().get('classId', '') && incoming().get('teacherGrade', null) == existing().get('teacherGrade', null) && incoming().get('aiJudgeResult', null) == existing().get('aiJudgeResult', null) && (incoming().get('portfolioSubmitted', false) == false || incoming().get('portfolioSubmissionStatus', 'late') == 'late' || request.time.toMillis() <= getFinalDeadline(get(/databases/$(database)/documents/classes/$(existing().get('classId', ''))).data)));
+      allow delete: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin();
+    }
+
+    match /portfolios/{portfolioId}/artworks/{artworkId} {
+      allow read: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/portfolios/$(portfolioId)) && get(/databases/$(database)/documents/users/$(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.studentId)/private/profile).data.get('isExample', false) == true);
+      allow create: if isPortfolioOwner(portfolioId) && isValidId(artworkId) && isValidArtwork(incoming()) && incoming().keys().hasOnly(['id', 'order', 'imageUrl', 'title', 'materials', 'processText', 'dimensions', 'ideas', 'type', 'createdAt', 'updatedAt', 'studentReflection', 'reflectionSummary', 'rubricScores', 'teacherFeedback', 'feedbackAt', 'submitted', 'submittedAt', 'citation', 'digitalTools']);
+      allow update: if isPortfolioOwner(portfolioId) && isValidArtwork(incoming()) && incoming().get('id', '') == existing().get('id', '') && incoming().get('type', '') == existing().get('type', '') && incoming().keys().hasOnly(['id', 'order', 'imageUrl', 'title', 'materials', 'processText', 'dimensions', 'ideas', 'type', 'createdAt', 'updatedAt', 'studentReflection', 'reflectionSummary', 'rubricScores', 'teacherFeedback', 'feedbackAt', 'submitted', 'submittedAt', 'citation', 'digitalTools']);
+      allow delete: if isPortfolioOwner(portfolioId);
+    }
+
+    match /portfolios/{portfolioId}/progress_photos/{photoId} {
+      allow read: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/portfolios/$(portfolioId)) && get(/databases/$(database)/documents/users/$(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.studentId)/private/profile).data.get('isExample', false) == true);
+      allow create, update: if isPortfolioOwner(portfolioId) && isValidId(photoId) && isValidProgressPhoto(incoming()) && incoming().keys().hasOnly(['id', 'imageUrl', 'uploadedAt', 'siArtworkId', 'caption', 'isExample', 'updatedAt']);
+      allow delete: if isPortfolioOwner(portfolioId);
+    }
+
+    match /portfolios/{portfolioId}/feedback/{feedbackId} {
+      allow read: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/portfolios/$(portfolioId)) && get(/databases/$(database)/documents/users/$(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.studentId)/private/profile).data.get('isExample', false) == true);
+      allow create: if isPortfolioTeacher(portfolioId) && isValidId(feedbackId) && isValidFeedback(incoming()) && incoming().get('teacherId', '') == request.auth.uid && incoming().keys().hasOnly(['id', 'teacherId', 'artworkId', 'text', 'createdAt', 'updatedAt']);
+      allow delete: if isOwner(existing().get('teacherId', '')) || isPortfolioTeacher(portfolioId) || isAdmin();
+    }
+  }
+}

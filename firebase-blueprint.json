@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public and private user profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "educator"] },
+        "isExample": { "type": "boolean" }
+      },
+      "required": ["uid", "role"]
+    },
+    "ClassRoom": {
+      "title": "Classroom",
+      "description": "Information about an AP Art classroom",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "name": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "courseType": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "startDate": { "type": "number" },
+        "deadlines": {
+          "type": "array",
+          "description": "List of 15 custom submission deadlines as millisecond timestamps",
+          "items": { "type": "number" }
+        },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "code", "teacherId", "name"]
+    },
+    "Portfolio": {
+      "title": "Student Portfolio",
+      "description": "The sustained investigation written evidence and metadata for a student in a class",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "inquiry": { "type": "string" },
+        "practice": { "type": "string" },
+        "experimentation": { "type": "string" },
+        "revision": { "type": "string" },
+        "portfolioSubmitted": { "type": "boolean" },
+        "portfolioSubmittedAt": { "type": "number" },
+        "portfolioSubmissionStatus": { "type": "string", "enum": ["on-time", "late"] },
+        "selfReflection": { "type": "object" },
+        "reflectionSummary": { "type": "string" },
+        "teacherGrade": { "type": "object" },
+        "aiJudgeResult": { "type": "object" }
+      },
+      "required": ["studentId", "classId"]
+    },
+    "Artwork": {
+      "title": "Artwork",
+      "description": "An individual piece of art in a portfolio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "order": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "title": { "type": "string" },
+        "materials": { "type": "string" },
+        "processText": { "type": "string" },
+        "dimensions": { "type": "string" },
+        "ideas": { "type": "string" },
+        "type": { "type": "string", "enum": ["SI", "Selected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "imageUrl", "type"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "Teacher feedback on art or portfolio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "artworkId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "teacherId", "text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/private/profile": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/classes/{classId}": {
+      "schema": "ClassRoom",
+      "description": "Classroom collections"
+    },
+    "/classes/{classId}/members/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Membership in a class"
+    },
+    "/portfolios/{portfolioId}": {
+      "schema": "Portfolio",
+      "description": "Portfolios indexed by classId_studentId"
+    },
+    "/portfolios/{portfolioId}/artworks/{artworkId}": {
+      "schema": "Artwork",
+      "description": "Artworks in a portfolio"
+    },
+    "/portfolios/{portfolioId}/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Feedback for a portfolio or specific artwork"
+    }
+  }
+}

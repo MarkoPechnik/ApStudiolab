@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --radius-3xl: 2.5rem;
+  
+  --color-brand-primary: #FF4E00; /* Safety Orange */
+  --color-brand-secondary: #6366F1; /* Indigo */
+  --color-paper: #F9F7F2;
+  --color-ink: #1A1A1A;
+}
+
+body {
+  @apply bg-paper text-ink font-sans antialiased relative overflow-x-hidden;
+}
+
+/* Subtle Paper Texture Overlay */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  z-index: 9999;
+}
+
+.brutal-card {
+  @apply border border-ink/8 rounded-[32px] bg-white transition-all duration-500 hover:border-brand-primary/35 hover:shadow-[0_22px_50px_-12px_rgba(255,78,0,0.06)];
+}
+
+.artistic-card {
+  @apply border border-ink/5 rounded-[32px] bg-white/80 backdrop-blur-md transition-all duration-500 hover:border-brand-primary/25 hover:shadow-[0_15px_40px_-10px_rgba(255,78,0,0.04)];
+}
+
+.brutal-btn {
+  @apply px-6 py-3 border border-ink rounded-full bg-ink text-white font-medium transition-all duration-300 hover:bg-white hover:text-ink active:scale-[0.98] cursor-pointer;
+}
+
+.art-btn-primary {
+  @apply px-6 py-3 rounded-full bg-brand-primary text-white font-semibold tracking-wide transition-all duration-350 hover:brightness-105 hover:shadow-[0_10px_25px_-4px_rgba(255,78,0,0.25)] active:scale-[0.98] cursor-pointer;
+}
+
+.brutal-input {
+  @apply w-full px-4 py-3 border border-ink/10 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/10 focus:border-brand-primary transition-all font-mono text-sm;
+}
+
+.editorial-title {
+  @apply font-display font-medium tracking-tight leading-none overflow-visible;
+}
+
+.stagger-item {
+  @apply transition-all duration-500 ease-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(26, 26, 26, 0.01);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(26, 26, 26, 0.12);
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-primary);
+}
+
+/* Notebook Line Guides */
+.notebook-lines {
+  background-image: linear-gradient(rgba(26, 26, 26, 0.05) 1px, transparent 1px);
+  background-size: 100% 2.5rem;
+  line-height: 2.5rem;
+}
+
+/* Glow ring effect for outstanding actions */
+.glowing-ring {
+  box-shadow: 0 0 0 4px rgba(255, 78, 0, 0.1);
+  animation: pulse-glow 2.5s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(255,78,0,0.06); }
+  50% { box-shadow: 0 0 0 8px rgba(255,78,0,0.18); }
+}
+
