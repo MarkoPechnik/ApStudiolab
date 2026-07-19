@@ -315,6 +315,7 @@ export default function App() {
   const [terminologySearch, setTerminologySearch] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const [showRoleSelection, setShowRoleSelection] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showSelectedWorksGuide, setShowSelectedWorksGuide] = useState(false);
@@ -545,6 +546,7 @@ export default function App() {
             setIsActingAsStudent(false);
             await loadDashboard(userData);
             setShowRoleSelection(false);
+            setInitError(null);
           } else {
             // New user or missing role, wait for role selection
             setUser({
@@ -557,6 +559,7 @@ export default function App() {
             setSelectedStudent(null);
             setIsActingAsStudent(false);
             setShowRoleSelection(true);
+            setInitError(null);
           }
         } else {
           setUser(null);
@@ -564,9 +567,11 @@ export default function App() {
           setActiveClass(null);
           setSelectedStudent(null);
           setIsActingAsStudent(false);
+          setInitError(null);
         }
       } catch (err) {
         console.error("Error loading user profile during auth state change:", err);
+        setInitError(err instanceof Error ? err.message : String(err));
       } finally {
         setLoading(false);
       }
@@ -1327,6 +1332,38 @@ export default function App() {
     
     doc.save(`${activeClass.name}_Portfolio.pdf`);
   };
+
+  if (initError) {
+    return (
+      <div className="min-h-screen bg-paper flex items-center justify-center p-8 text-ink">
+        <div className="brutal-card p-12 bg-white max-w-2xl text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mx-auto">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-3xl font-serif font-bold text-brand-secondary">Database Connection Error</h2>
+          <p className="text-sm text-ink/60 leading-relaxed">
+            The application was unable to establish a secure connection to your Firebase Database. This usually happens if:
+          </p>
+          <ul className="text-left text-xs font-mono bg-ink/5 p-4 rounded-lg space-y-2 text-ink/75">
+            <li>1. The Cloud Firestore Database is not yet created/provisioned in your Firebase Console.</li>
+            <li>2. The Firestore Security Rules (<code className="bg-ink/10 px-1 py-0.5 rounded">firestore.rules</code>) have not been published or have a syntax error.</li>
+            <li>3. The custom domain (<code className="bg-ink/10 px-1 py-0.5 rounded">apstudiolab.com</code>) has not been added to the <strong>Authorized Domains</strong> whitelist in your Firebase Authentication settings.</li>
+          </ul>
+          <div className="pt-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-8 py-3 bg-brand-primary text-white text-xs font-mono font-bold uppercase tracking-wider rounded-full hover:bg-brand-primary/95 transition-all"
+            >
+              Retry Connection
+            </button>
+          </div>
+          <p className="text-[10px] text-ink/30 text-left pt-4 border-t border-ink/5 truncate">
+            <strong>Error Details:</strong> {initError}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user || user.role === null) {
     if (loading) {
