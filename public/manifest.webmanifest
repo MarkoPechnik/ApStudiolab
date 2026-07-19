@@ -1,0 +1,16 @@
+{
+  "name": "AP Art Studio Lab",
+  "short_name": "ArtStudioLab",
+  "description": "A digital studio lab for AP Art students to document process photos, final images, and written reflection.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1E1B4B",
+  "theme_color": "#312E81",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
