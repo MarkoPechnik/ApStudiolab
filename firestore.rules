@@ -125,43 +125,43 @@ service cloud.firestore {
     // --- Rules ---
 
     match /users/{userId}/private/profile {
-      allow get: if isOwner(userId) || (isSignedIn() && get(/databases/$(database)/documents/users/$(userId)/private/profile).data.get('isExample', false) == true) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().get('uid', '') == userId;
-      allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().get('role', 'student') == existing().get('role', 'student') && incoming().get('uid', '') == userId;
+      allow get: if isOwner(userId) || (isSignedIn() && 'isExample' in resource.data && resource.data.isExample == true) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == userId;
+      allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().role == existing().role && incoming().uid == userId;
     }
 
     match /global_profiles/{profileId} {
       allow get: if isOwner(profileId) || isAdmin();
       allow list: if isAdmin();
-      allow create: if isOwner(profileId) && isValidUser(incoming()) && incoming().get('uid', '') == profileId;
-      allow update: if isOwner(profileId) && isValidUser(incoming()) && incoming().get('role', 'student') == existing().get('role', 'student') && incoming().get('uid', '') == profileId;
+      allow create: if isOwner(profileId) && isValidUser(incoming()) && incoming().uid == profileId;
+      allow update: if isOwner(profileId) && isValidUser(incoming()) && incoming().role == existing().role && incoming().uid == profileId;
     }
 
     match /classes/{classId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(classId) && isValidClass(incoming()) && incoming().get('teacherId', '') == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)/private/profile).data.get('role', '') == 'educator';
-      allow update: if isClassTeacher(classId) && isValidClass(incoming()) && incoming().get('teacherId', '') == existing().get('teacherId', '');
+      allow create: if isSignedIn() && isValidId(classId) && isValidClass(incoming()) && incoming().teacherId == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)/private/profile).data.role == 'educator';
+      allow update: if isClassTeacher(classId) && isValidClass(incoming()) && incoming().teacherId == existing().teacherId;
       allow delete: if isClassTeacher(classId) || isAdmin();
     }
 
     match /classes/{classId}/members/{userId} {
       allow read: if isOwner(userId) || isClassTeacher(classId) || isClassMember(classId, request.auth.uid) || isAdmin();
-      allow create, update: if (isOwner(userId) || isClassTeacher(classId)) && isValidId(userId) && isValidUser(incoming()) && incoming().get('uid', '') == userId;
+      allow create, update: if (isOwner(userId) || isClassTeacher(classId)) && isValidId(userId) && isValidUser(incoming()) && incoming().uid == userId;
       allow delete: if isOwner(userId) || isClassTeacher(classId);
     }
 
     match /classes/{classId}/peer_critiques/{critiqueId} {
       allow read: if isClassMember(classId, request.auth.uid) || isClassTeacher(classId) || isAdmin();
-      allow create: if isSignedIn() && isValidId(critiqueId) && incoming().get('authorId', '') == request.auth.uid && (isClassMember(classId, request.auth.uid) || isClassTeacher(classId)) && incoming().keys().hasOnly(['id', 'classId', 'authorId', 'authorName', 'targetStudentId', 'targetStudentName', 'artworkId', 'artworkTitle', 'artworkUrl', 'text', 'createdAt', 'isVerified', 'aiRating', 'aiFeedback', 'foundTerminology', 'aiVerificationDetails', 'updatedAt']) && incoming().get('text', '').size() <= 2000 && exists(/databases/$(database)/documents/classes/$(classId)/members/$(incoming().get('targetStudentId', '')));
-      allow update: if isSignedIn() && request.auth.uid == incoming().get('authorId', '') && (isClassMember(classId, request.auth.uid) || isClassTeacher(classId)) && incoming().keys().hasOnly(['id', 'classId', 'authorId', 'authorName', 'targetStudentId', 'targetStudentName', 'artworkId', 'artworkTitle', 'artworkUrl', 'text', 'createdAt', 'isVerified', 'aiRating', 'aiFeedback', 'foundTerminology', 'aiVerificationDetails', 'updatedAt']) && incoming().get('text', '').size() <= 2000 && incoming().get('authorId', '') == existing().get('authorId', '') && incoming().get('targetStudentId', '') == existing().get('targetStudentId', '') && incoming().get('classId', '') == existing().get('classId', '');
-      allow delete: if isSignedIn() && (request.auth.uid == existing().get('authorId', '') || isClassTeacher(classId));
+      allow create: if isSignedIn() && isValidId(critiqueId) && incoming().authorId == request.auth.uid && (isClassMember(classId, request.auth.uid) || isClassTeacher(classId)) && incoming().keys().hasOnly(['id', 'classId', 'authorId', 'authorName', 'targetStudentId', 'targetStudentName', 'artworkId', 'artworkTitle', 'artworkUrl', 'text', 'createdAt', 'isVerified', 'aiRating', 'aiFeedback', 'foundTerminology', 'aiVerificationDetails', 'updatedAt']) && incoming().text.size() <= 2000 && exists(/databases/$(database)/documents/classes/$(classId)/members/$(incoming().targetStudentId));
+      allow update: if isSignedIn() && request.auth.uid == incoming().authorId && (isClassMember(classId, request.auth.uid) || isClassTeacher(classId)) && incoming().keys().hasOnly(['id', 'classId', 'authorId', 'authorName', 'targetStudentId', 'targetStudentName', 'artworkId', 'artworkTitle', 'artworkUrl', 'text', 'createdAt', 'isVerified', 'aiRating', 'aiFeedback', 'foundTerminology', 'aiVerificationDetails', 'updatedAt']) && incoming().text.size() <= 2000 && incoming().authorId == existing().authorId && incoming().targetStudentId == existing().targetStudentId && incoming().classId == existing().classId;
+      allow delete: if isSignedIn() && (request.auth.uid == existing().authorId || isClassTeacher(classId));
     }
 
     match /portfolios/{portfolioId} {
       allow read: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/portfolios/$(portfolioId)) && ('isExample' in get(/databases/$(database)/documents/users/$(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.studentId)/private/profile).data && get(/databases/$(database)/documents/users/$(get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.studentId)/private/profile).data.isExample == true));
-      allow create: if isSignedIn() && isValidId(portfolioId) && isValidPortfolio(incoming()) && portfolioId == incoming().get('classId', '') + '_' + incoming().get('studentId', '') && incoming().get('studentId', '') == request.auth.uid && isClassMember(incoming().get('classId', ''), request.auth.uid) && incoming().get('teacherGrade', null) == null && incoming().get('aiJudgeResult', null) == null;
-      allow update: if (isPortfolioTeacher(portfolioId) && isValidPortfolio(incoming()) && incoming().get('studentId', '') == existing().get('studentId', '') && incoming().get('classId', '') == existing().get('classId', '')) ||
-                       (isPortfolioOwner(portfolioId) && isValidPortfolio(incoming()) && incoming().get('studentId', '') == existing().get('studentId', '') && incoming().get('classId', '') == existing().get('classId', '') && incoming().get('teacherGrade', null) == existing().get('teacherGrade', null) && incoming().get('aiJudgeResult', null) == existing().get('aiJudgeResult', null) && (incoming().get('portfolioSubmitted', false) == false || incoming().get('portfolioSubmissionStatus', 'late') == 'late' || request.time.toMillis() <= getFinalDeadline(get(/databases/$(database)/documents/classes/$(existing().classId)).data)));
+      allow create: if isSignedIn() && isValidId(portfolioId) && isValidPortfolio(incoming()) && portfolioId == incoming().classId + '_' + incoming().studentId && incoming().studentId == request.auth.uid && isClassMember(incoming().classId, request.auth.uid) && incoming().get('teacherGrade', null) == null && incoming().get('aiJudgeResult', null) == null;
+      allow update: if (isPortfolioTeacher(portfolioId) && isValidPortfolio(incoming()) && incoming().studentId == existing().studentId && incoming().classId == existing().classId) ||
+                       (isPortfolioOwner(portfolioId) && isValidPortfolio(incoming()) && incoming().studentId == existing().studentId && incoming().classId == existing().classId && incoming().get('teacherGrade', null) == existing().get('teacherGrade', null) && incoming().get('aiJudgeResult', null) == existing().get('aiJudgeResult', null) && (incoming().get('portfolioSubmitted', false) == false || incoming().get('portfolioSubmissionStatus', 'late') == 'late' || request.time.toMillis() <= getFinalDeadline(get(/databases/$(database)/documents/classes/$(existing().classId)).data)));
       allow delete: if isPortfolioOwner(portfolioId) || isPortfolioTeacher(portfolioId) || isAdmin();
     }
 
