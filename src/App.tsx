@@ -315,7 +315,6 @@ export default function App() {
   const [terminologySearch, setTerminologySearch] = useState('');
   
   const [loading, setLoading] = useState(false);
-  const [initError, setInitError] = useState<string | null>(null);
   const [showRoleSelection, setShowRoleSelection] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showSelectedWorksGuide, setShowSelectedWorksGuide] = useState(false);
@@ -536,45 +535,36 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setLoading(true);
-      try {
-        if (fbUser) {
-          const userData = await storageService.getUser(fbUser.uid);
-          if (userData && userData.role) {
-            setUser(userData);
-            setActiveClass(null);
-            setSelectedStudent(null);
-            setIsActingAsStudent(false);
-            await loadDashboard(userData);
-            setShowRoleSelection(false);
-            setInitError(null);
-          } else {
-            // New user or missing role, wait for role selection
-            setUser({
-              uid: fbUser.uid,
-              email: fbUser.email,
-              displayName: fbUser.displayName,
-              role: userData?.role || null
-            });
-            setActiveClass(null);
-            setSelectedStudent(null);
-            setIsActingAsStudent(false);
-            setShowRoleSelection(true);
-            setInitError(null);
-          }
-        } else {
-          setUser(null);
-          setClasses([]);
+      if (fbUser) {
+        const userData = await storageService.getUser(fbUser.uid);
+        if (userData && userData.role) {
+          setUser(userData);
           setActiveClass(null);
           setSelectedStudent(null);
           setIsActingAsStudent(false);
-          setInitError(null);
+          loadDashboard(userData);
+          setShowRoleSelection(false);
+        } else {
+          // New user or missing role, wait for role selection
+          setUser({
+            uid: fbUser.uid,
+            email: fbUser.email,
+            displayName: fbUser.displayName,
+            role: userData?.role || null
+          });
+          setActiveClass(null);
+          setSelectedStudent(null);
+          setIsActingAsStudent(false);
+          setShowRoleSelection(true);
         }
-      } catch (err) {
-        console.error("Error loading user profile during auth state change:", err);
-        setInitError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoading(false);
+      } else {
+        setUser(null);
+        setClasses([]);
+        setActiveClass(null);
+        setSelectedStudent(null);
+        setIsActingAsStudent(false);
       }
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -665,42 +655,34 @@ export default function App() {
       console.warn("Could not self-heal global profile on load:", e);
     }
 
-    try {
-      if (currUser.role === 'educator') {
-        // Ensure the sample course exists for everyone to try
+    if (currUser.role === 'educator') {
+      // Ensure the sample course exists for everyone to try
+      await storageService.ensureSampleCourse(currUser.uid, currUser.displayName || 'Marko Pechnik');
+      
+      let fetchedClasses: ClassRoom[] = [];
+      if (currUser.email === 'markopechnik@gmail.com') {
+        fetchedClasses = await storageService.getAllClasses();
         try {
-          await storageService.ensureSampleCourse(currUser.uid, currUser.displayName || 'Marko Pechnik');
-        } catch (sampleErr) {
-          console.warn("Failed to check/ensure sample course:", sampleErr);
+          const profiles = await storageService.getGlobalProfiles();
+          setGlobalProfiles(profiles);
+        } catch (err) {
+          console.error("Failed to load global profiles:", err);
         }
-        
-        let fetchedClasses: ClassRoom[] = [];
-        if (currUser.email === 'markopechnik@gmail.com') {
-          fetchedClasses = await storageService.getAllClasses();
-          try {
-            const profiles = await storageService.getGlobalProfiles();
-            setGlobalProfiles(profiles);
-          } catch (err) {
-            console.error("Failed to load global profiles:", err);
-          }
-        } else {
-          fetchedClasses = await storageService.getClassesByTeacher(currUser.uid);
-        }
-        setClasses(fetchedClasses);
       } else {
-        const studentClasses = await storageService.getClassesByStudent(currUser.uid);
-        setClasses(studentClasses);
-        // Auto-heal class membership for current user in physical database collections
-        studentClasses.forEach(async (c) => {
-          try {
-            await storageService.addClassMember(c.id, currUser);
-          } catch (err) {
-            console.warn(`Could not self-heal membership for ${currUser.uid} in class ${c.id}:`, err);
-          }
-        });
+        fetchedClasses = await storageService.getClassesByTeacher(currUser.uid);
       }
-    } catch (dashboardErr) {
-      console.error("Error loading dashboard data:", dashboardErr);
+      setClasses(fetchedClasses);
+    } else {
+      const studentClasses = await storageService.getClassesByStudent(currUser.uid);
+      setClasses(studentClasses);
+      // Auto-heal class membership for current user in physical database collections
+      studentClasses.forEach(async (c) => {
+        try {
+          await storageService.addClassMember(c.id, currUser);
+        } catch (err) {
+          console.warn(`Could not self-heal membership for ${currUser.uid} in class ${c.id}:`, err);
+        }
+      });
     }
   };
 
@@ -1332,38 +1314,6 @@ export default function App() {
     
     doc.save(`${activeClass.name}_Portfolio.pdf`);
   };
-
-  if (initError) {
-    return (
-      <div className="min-h-screen bg-paper flex items-center justify-center p-8 text-ink">
-        <div className="brutal-card p-12 bg-white max-w-2xl text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mx-auto">
-            <AlertCircle size={32} />
-          </div>
-          <h2 className="text-3xl font-serif font-bold text-brand-secondary">Database Connection Error</h2>
-          <p className="text-sm text-ink/60 leading-relaxed">
-            The application was unable to establish a secure connection to your Firebase Database. This usually happens if:
-          </p>
-          <ul className="text-left text-xs font-mono bg-ink/5 p-4 rounded-lg space-y-2 text-ink/75">
-            <li>1. The Cloud Firestore Database is not yet created/provisioned in your Firebase Console.</li>
-            <li>2. The Firestore Security Rules (<code className="bg-ink/10 px-1 py-0.5 rounded">firestore.rules</code>) have not been published or have a syntax error.</li>
-            <li>3. The custom domain (<code className="bg-ink/10 px-1 py-0.5 rounded">apstudiolab.com</code>) has not been added to the <strong>Authorized Domains</strong> whitelist in your Firebase Authentication settings.</li>
-          </ul>
-          <div className="pt-4">
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-8 py-3 bg-brand-primary text-white text-xs font-mono font-bold uppercase tracking-wider rounded-full hover:bg-brand-primary/95 transition-all"
-            >
-              Retry Connection
-            </button>
-          </div>
-          <p className="text-[10px] text-ink/30 text-left pt-4 border-t border-ink/5 truncate">
-            <strong>Error Details:</strong> {initError}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   if (!user || user.role === null) {
     if (loading) {
