@@ -535,36 +535,41 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setLoading(true);
-      if (fbUser) {
-        const userData = await storageService.getUser(fbUser.uid);
-        if (userData && userData.role) {
-          setUser(userData);
-          setActiveClass(null);
-          setSelectedStudent(null);
-          setIsActingAsStudent(false);
-          loadDashboard(userData);
-          setShowRoleSelection(false);
+      try {
+        if (fbUser) {
+          const userData = await storageService.getUser(fbUser.uid);
+          if (userData && userData.role) {
+            setUser(userData);
+            setActiveClass(null);
+            setSelectedStudent(null);
+            setIsActingAsStudent(false);
+            await loadDashboard(userData);
+            setShowRoleSelection(false);
+          } else {
+            // New user or missing role, wait for role selection
+            setUser({
+              uid: fbUser.uid,
+              email: fbUser.email,
+              displayName: fbUser.displayName,
+              role: userData?.role || null
+            });
+            setActiveClass(null);
+            setSelectedStudent(null);
+            setIsActingAsStudent(false);
+            setShowRoleSelection(true);
+          }
         } else {
-          // New user or missing role, wait for role selection
-          setUser({
-            uid: fbUser.uid,
-            email: fbUser.email,
-            displayName: fbUser.displayName,
-            role: userData?.role || null
-          });
+          setUser(null);
+          setClasses([]);
           setActiveClass(null);
           setSelectedStudent(null);
           setIsActingAsStudent(false);
-          setShowRoleSelection(true);
         }
-      } else {
-        setUser(null);
-        setClasses([]);
-        setActiveClass(null);
-        setSelectedStudent(null);
-        setIsActingAsStudent(false);
+      } catch (err) {
+        console.error("Error loading user profile during auth state change:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -655,34 +660,42 @@ export default function App() {
       console.warn("Could not self-heal global profile on load:", e);
     }
 
-    if (currUser.role === 'educator') {
-      // Ensure the sample course exists for everyone to try
-      await storageService.ensureSampleCourse(currUser.uid, currUser.displayName || 'Marko Pechnik');
-      
-      let fetchedClasses: ClassRoom[] = [];
-      if (currUser.email === 'markopechnik@gmail.com') {
-        fetchedClasses = await storageService.getAllClasses();
+    try {
+      if (currUser.role === 'educator') {
+        // Ensure the sample course exists for everyone to try
         try {
-          const profiles = await storageService.getGlobalProfiles();
-          setGlobalProfiles(profiles);
-        } catch (err) {
-          console.error("Failed to load global profiles:", err);
+          await storageService.ensureSampleCourse(currUser.uid, currUser.displayName || 'Marko Pechnik');
+        } catch (sampleErr) {
+          console.warn("Failed to check/ensure sample course:", sampleErr);
         }
+        
+        let fetchedClasses: ClassRoom[] = [];
+        if (currUser.email === 'markopechnik@gmail.com') {
+          fetchedClasses = await storageService.getAllClasses();
+          try {
+            const profiles = await storageService.getGlobalProfiles();
+            setGlobalProfiles(profiles);
+          } catch (err) {
+            console.error("Failed to load global profiles:", err);
+          }
+        } else {
+          fetchedClasses = await storageService.getClassesByTeacher(currUser.uid);
+        }
+        setClasses(fetchedClasses);
       } else {
-        fetchedClasses = await storageService.getClassesByTeacher(currUser.uid);
+        const studentClasses = await storageService.getClassesByStudent(currUser.uid);
+        setClasses(studentClasses);
+        // Auto-heal class membership for current user in physical database collections
+        studentClasses.forEach(async (c) => {
+          try {
+            await storageService.addClassMember(c.id, currUser);
+          } catch (err) {
+            console.warn(`Could not self-heal membership for ${currUser.uid} in class ${c.id}:`, err);
+          }
+        });
       }
-      setClasses(fetchedClasses);
-    } else {
-      const studentClasses = await storageService.getClassesByStudent(currUser.uid);
-      setClasses(studentClasses);
-      // Auto-heal class membership for current user in physical database collections
-      studentClasses.forEach(async (c) => {
-        try {
-          await storageService.addClassMember(c.id, currUser);
-        } catch (err) {
-          console.warn(`Could not self-heal membership for ${currUser.uid} in class ${c.id}:`, err);
-        }
-      });
+    } catch (dashboardErr) {
+      console.error("Error loading dashboard data:", dashboardErr);
     }
   };
 

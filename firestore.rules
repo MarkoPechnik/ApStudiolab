@@ -138,8 +138,7 @@ service cloud.firestore {
     }
 
     match /classes/{classId} {
-      allow get: if isSignedIn() && (isClassTeacher(classId) || exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.auth.uid)) || isAdmin());
-      allow list: if isSignedIn() && (resource == null || request.auth.uid in resource.data.get('studentIds', []) || resource.data.get('teacherId', '') == request.auth.uid || isAdmin());
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn() && isValidId(classId) && isValidClass(incoming()) && incoming().get('teacherId', '') == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)/private/profile).data.get('role', '') == 'educator';
       allow update: if isClassTeacher(classId) && isValidClass(incoming()) && incoming().get('teacherId', '') == existing().get('teacherId', '');
       allow delete: if isClassTeacher(classId) || isAdmin();
