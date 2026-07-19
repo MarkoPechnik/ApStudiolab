@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import defaultFirebaseConfig from '../../firebase-applet-config.json';
 
@@ -14,11 +14,25 @@ const firebaseConfig = {
   measurementId: process.env.FIREBASE_MEASUREMENT_ID || defaultFirebaseConfig.measurementId || ""
 };
 
-const firestoreDatabaseId = process.env.FIREBASE_DATABASE_URL || defaultFirebaseConfig.firestoreDatabaseId || "(default)";
+// Handle potential Realtime Database URL values in FIREBASE_DATABASE_URL and default to "(default)" for Firestore
+let firestoreDatabaseId = "(default)";
+if (process.env.FIREBASE_DATABASE_URL) {
+  const dbUrl = process.env.FIREBASE_DATABASE_URL;
+  if (!dbUrl.includes("http") && !dbUrl.includes("firebaseio.com")) {
+    firestoreDatabaseId = dbUrl;
+  }
+} else if (defaultFirebaseConfig.firestoreDatabaseId) {
+  firestoreDatabaseId = defaultFirebaseConfig.firestoreDatabaseId;
+}
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firestoreDatabaseId);
 export const auth = getAuth(app);
+
+// Enforce session persistence so the user is logged out when they close the browser
+setPersistence(auth, browserSessionPersistence).catch((err) => {
+  console.error("Failed to set auth persistence to session:", err);
+});
 
 // Validation check as per guidelines
 async function testConnection() {
